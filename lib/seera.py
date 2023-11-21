@@ -31,6 +31,19 @@ class SEERA():
             group_names[key] = [self.names[i] for i in self.group_index[key]]
         return group_names
 
+    def update_group_index(self):
+        self.group_index = {}
+        for i in range(len(self.names)):
+            for key in self.group_names:
+                if self.names[i] in self.group_names[key]:
+                    if key in self.group_index: self.group_index[key].append(i)
+                    else: self.group_index[key] = [i]
+
+    def read_from_sheet(self, sheet_name, name):
+        print('Reading from sheet:', sheet_name)
+        data = pd.read_excel(self.path, sheet_name=sheet_name, header=1)
+        return data[name]
+
     def delete_column(self, column):
         column_idx, column_name = column, column
         if type(column) == str: 
@@ -46,13 +59,7 @@ class SEERA():
         for key in self.group_names:
             if column_name in self.group_names[key]:
                 self.group_names[key].remove(column_name)
-
-        self.group_index = {}
-        for i in range(len(self.names)):
-            for key in self.group_names:
-                if self.names[i] in self.group_names[key]:
-                    if key in self.group_index: self.group_index[key].append(i)
-                    else: self.group_index[key] = [i]
+        self.update_group_index()
 
     def delete_row(self, row):
         if type(row) == int: pass
@@ -66,13 +73,7 @@ class SEERA():
         self.data.insert(index, name, values)
         self.names.insert(index, name)
         self.group_names[group_name].append(name)
-
-        self.group_index = {}
-        for i in range(len(self.names)):
-            for key in self.group_names:
-                if self.names[i] in self.group_names[key]:
-                    if key in self.group_index: self.group_index[key].append(i)
-                    else: self.group_index[key] = [i]
+        self.update_group_index()
 
     def analyze_missing_values_per_attribute(self, column):
         if type(column) == str: column = self.names.index(column)
