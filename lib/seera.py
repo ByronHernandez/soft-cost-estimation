@@ -40,7 +40,6 @@ class SEERA():
                     else: self.group_index[key] = [i]
 
     def read_from_sheet(self, sheet_name, name):
-        print('Reading from sheet:', sheet_name)
         data = pd.read_excel(self.path, sheet_name=sheet_name, header=1)
         return data[name]
 
