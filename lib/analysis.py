@@ -14,7 +14,7 @@ def analyze_significance(seera):
     seera.print_groups_indexes()
     seera.print_group_names()
 
-def analize_attributes(seera):
+def analyze_attributes(seera):
     complete = 0
     print('\n\nAttribute' + ' ' * 42 + " 'nan'     'miss'     'ok'       'total'\n" + "-" * 96)
     for key in seera.names:
@@ -23,7 +23,7 @@ def analize_attributes(seera):
         print(name + ' ' * (50 - len(name)), analysis)
     print('Number of attributes in all the projects:', complete)
 
-def analize_projects(seera):
+def analyze_projects(seera):
     complete = 0
     print("\n\nPrj  'nan'     'miss'     'ok'      'total'\n" + "-" * 47)
     for i in range(len(seera.data)):
@@ -44,8 +44,8 @@ def initial_analysis(path, verbose=False):
         name, analysis = seera.analyze_missing_values_per_attribute(12)
         print(name, analysis)
         # Print the number of missing values per project
-        analize_attributes(seera)
-        analize_projects(seera)
+        analyze_attributes(seera)
+        analyze_projects(seera)
     return seera
 
 def completeness_analysis(path, verbose=False):
@@ -72,7 +72,7 @@ def completeness_analysis(path, verbose=False):
 
     out_columns = [
         'Actual duration',            # not available a-priori
-        '% project gain (loss)',      # too many missing values: 56
+        # '% project gain (loss)',      # too many missing values: 56
         'Actual effort',              # not available a-priori
                   ]
 
@@ -92,22 +92,24 @@ def completeness_analysis(path, verbose=False):
     if verbose:
         print('\n' + '=' * 28 + '\n=> After deleting columns <=\n' + '=' * 28 + '\n')
         analyze_significance(seera)
-        analize_attributes(seera)
-        analize_projects(seera)
+        analyze_attributes(seera)
+        analyze_projects(seera)
 
     # Recover the output columns
     cost = seera.read_from_sheet("General Information", "Actual incurred costs ")
     seera.add_column('Actual cost', 'General Information', cost)
+    estimated_cost = seera.read_from_sheet("General Information", "Contract price ")
+    seera.add_column('Estimated cost', 'General Information', estimated_cost)
     
     if verbose:
         print('\n' + '=' * 25 + '\n=> After adding output <=\n' + '=' * 25 + '\n')
         analyze_significance(seera)
-        analize_attributes(seera)
-        analize_projects(seera)
+        analyze_attributes(seera)
+        analyze_projects(seera)
 
     # Delete projects w/o output or with missing values
     rows_to_keep = list(range(len(seera.data)))
-    rows_to_delete = [] # projects with missing values
+    rows_to_delete = [] # projects with missing values. 4 is outlier
 
     for i in range(len(seera.data)):
         for column in seera.names:
@@ -125,12 +127,12 @@ def completeness_analysis(path, verbose=False):
     if verbose:
         print('\n' + '=' * 40 + '\n=> After deleting projects w/o output <=\n' + '=' * 40 + '\n')
         analyze_significance(seera)
-        analize_attributes(seera)
-        analize_projects(seera)
+        analyze_attributes(seera)
+        analyze_projects(seera)
 
     return seera, rows_to_keep
 
-def correlation_analysis(seera, rows_to_keep, font_size=6, figsize=(8, 8)):
+def correlation_analysis(seera, rows_to_keep, output, font_size=6, figsize=(8, 8), show=False):
     # Compute the correlation matrix
     corr = seera.data.corr()
 
@@ -151,47 +153,38 @@ def correlation_analysis(seera, rows_to_keep, font_size=6, figsize=(8, 8)):
     plt.savefig('output/correlation.png', dpi=300, bbox_inches='tight')
     plt.savefig('output/correlation.eps', dpi=300, format='eps', bbox_inches='tight')
     plt.savefig('output/correlation.pdf', dpi=300, format='pdf', bbox_inches='tight')
-    # Show the plot (optional)
-    # plt.show()
 
-    # Isolated analisys 
-    corr_var = corr[['Actual cost']]
-    corr_var = corr_var.drop('Actual cost', axis=0)
-    corr_var = corr_var.sort_values(by='Actual cost', ascending=False)
+    # Isolated analisys
+    corr_var = corr[[output]]
+    corr_var = corr_var.drop(output, axis=0)
+    corr_var = corr_var.sort_values(by=output, ascending=False)
     
     # Using heatmaps
     f, ax = plt.subplots(figsize=figsize)
     # Convert the series into a DataFrame
     corr_var_df = corr_var.unstack().to_frame().T
-    # Generate a custom diverging colormap
-    cmap = sns.diverging_palette(220, 10, as_cmap=True)
     # Draw the heatmap with the mask and correct aspect ratio
     sns.heatmap(corr_var_df, cmap=cmap, square=True, linewidths=0.5, annot=False, cbar_kws={"shrink": 1},
                 xticklabels=True, yticklabels=False, annot_kws={"size": font_size}, vmin=-0.6, vmax=0.6)
     # Set the font size for x and y tick labels
     ax.tick_params(axis='both', labelsize=font_size)
-    ax.set_ylabel('Correlation with Actual cost'), ax.set_xlabel('')
+    ax.set_ylabel('Correlation with %s' % output), ax.set_xlabel('')
     # Save as png, eps, and pdf formats with adjusted layout
     plt.savefig('output/correlation_cost_heat.png', dpi=300, bbox_inches='tight')
     plt.savefig('output/correlation_cost_heat.eps', dpi=300, format='eps', bbox_inches='tight')
     plt.savefig('output/correlation_cost_heat.pdf', dpi=300, format='pdf', bbox_inches='tight')
-    # Show the plot (optional)
-    # plt.show()
 
     # Using barplots
     f, ax = plt.subplots(figsize=figsize)
     # Create a DataFrame for better visualization
     corr_var_df = pd.DataFrame(corr_var).reset_index()
-    # corr_var_df.drop(seera.names.index('Actual cost'), axis=0, inplace=True)
-    # corr_var_df.reset_index(inplace=True)
-    corr_var_df.columns = ['', 'Correlation with Actual cost']
+    corr_var_df.columns = ['', 'Correlation with %s' % output]
     # Plot the correlations of the variable of interest against all others
-    sns.barplot(y='', x='Correlation with Actual cost', data=corr_var_df, ax=ax)
+    sns.barplot(y='', x='Correlation with %s' % output , data=corr_var_df, ax=ax)
     # Set the font size for x and y tick labels
     ax.tick_params(axis='both', labelsize=font_size)
     # Save as png, eps, and pdf formats with adjusted layout
     plt.savefig('output/correlation_cost_bars.png', dpi=300, bbox_inches='tight')
     plt.savefig('output/correlation_cost_bars.eps', dpi=300, format='eps', bbox_inches='tight')
     plt.savefig('output/correlation_cost_bars.pdf', dpi=300, format='pdf', bbox_inches='tight')
-    # Show the plot (optional)
-    # plt.show()
+    if show: plt.show()
