@@ -9,6 +9,42 @@ from .seera import SEERA
 import matplotlib.pyplot as plt
 
 
+# Columns to delete [from own analysis]
+columns = [
+    'ProjID',                     # not relevant
+    'Organization id',            # not relevant
+    # 'Estimated  duration',        # its an estimation from a formula
+    'Estimated size',             # too many missing values: 107
+    # 'Estimated effort',           # its an estimation from a formula
+    'Economic instability impact',# formula including unknown values
+    'Top management support',     # formula including unknown values
+    'Requirment stability',       # formula including unknown values
+    'Team contracts',             # too many missing values: 11
+    'Team continuity ',           # formula including unknown values
+    'Schedule quality',           # formula including unknown values 
+    'Programming language used',  # very ambiguous
+    'Technical stability',        # formula including unknown values
+    'Outsourcing impact',         # too many missing values: 109
+    'Degree of standards usage',  # too many missing values: 99
+    'Process reengineering',      # formula including unknown values
+            ]
+
+out_columns = [
+    'Actual duration',            # not available a-priori
+    # '% project gain (loss)',      # too many missing values: 56
+    'Actual effort',              # not available a-priori
+                ]
+
+categorical_columns = [
+    'Organization type',
+    'Role in organization',
+    'Customer organization type',
+    'Development type',
+    'Application domain',
+    'Methodology',
+    'DBMS used'
+]
+
 def analyze_significance(seera):
     seera.print_column_names()
     seera.print_groups_indexes()
@@ -50,41 +86,6 @@ def initial_analysis(path, verbose=False):
 
 def completeness_analysis(path, verbose=False):
     seera = SEERA(path)
-    # Columns to delete [from own analysis]
-    columns = [
-        'ProjID',                     # not relevant
-        'Organization id',            # not relevant
-        # 'Estimated  duration',        # its an estimation from a formula
-        'Estimated size',             # too many missing values: 107
-        # 'Estimated effort',           # its an estimation from a formula
-        'Economic instability impact',# formula including unknown values
-        'Top management support',     # formula including unknown values
-        'Requirment stability',       # formula including unknown values
-        'Team contracts',             # too many missing values: 11
-        'Team continuity ',           # formula including unknown values
-        'Schedule quality',           # formula including unknown values 
-        'Programming language used',  # very ambiguous
-        'Technical stability',        # formula including unknown values
-        'Outsourcing impact',         # too many missing values: 109
-        'Degree of standards usage',  # too many missing values: 99
-        'Process reengineering',      # formula including unknown values
-               ]
-
-    out_columns = [
-        'Actual duration',            # not available a-priori
-        # '% project gain (loss)',      # too many missing values: 56
-        'Actual effort',              # not available a-priori
-                  ]
-
-    categorical_columns = [
-        'Organization type',
-        'Role in organization',
-        'Customer organization type',
-        'Development type',
-        'Application domain',
-        'Methodology',
-        'DBMS used'
-    ]
 
     for column in columns + out_columns + categorical_columns:
         seera.delete_column(column)

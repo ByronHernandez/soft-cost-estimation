@@ -28,6 +28,9 @@ class Experiment():
         self.actual_cost_test = actual_cost[test_indexes]
         self.normalize()
 
+    def normalize_test(self, X, y):
+        return X / self.X_train_max, y / self.y_train_max
+
     def normalize(self):
         # Obtain min, max, std and mean of the train set
         self.X_train_min = np.min(self.X_train, axis=0)
@@ -47,7 +50,7 @@ class Experiment():
 
     def denormalize(self, y):
         return y * self.y_train_max
-    
+
     def run(self):
         self.grid_search.fit(self.X_train_normalized, self.y_train_normalized)
         self.best_params = self.grid_search.best_params_
