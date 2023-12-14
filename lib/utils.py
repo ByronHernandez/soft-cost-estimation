@@ -73,11 +73,11 @@ def denormalize(y, y_normalizer, mode='std'):
     else:
         raise ValueError('Invalid normalization mode')
 
-def plot_r2_vs_param(results, param_name, show=False):
+def plot_r2_vs_param(results, param_name, scoring, show=False):
     plt.figure()
-    plt.plot(results[param_name], results['mean_test_score'], 'o')
+    plt.plot(results[param_name], np.abs(results['mean_test_score']), 'o')
     plt.xlabel(param_name.removeprefix('param_'))
-    plt.ylabel('R2')
+    plt.ylabel(scoring)
     if show: plt.show()
 
 def analyze_errors(y, y_pred, name, aux=None, plot=False, show=False):
@@ -87,12 +87,13 @@ def analyze_errors(y, y_pred, name, aux=None, plot=False, show=False):
         error = y_pred - y
         abs_errors = np.abs(error)
         rel_errors = np.abs(error / y)
+        print('[%s] absolute errors: %3.3f, %3.3f, %3.3f' % (name, abs_errors.min(), abs_errors.mean(), abs_errors.max()))
+        print('[%s] relative errors: %3.3f, %3.3f, %3.3f' % (name, rel_errors.min(), rel_errors.mean(), rel_errors.max()))
     else:
         error = y_pred - y
         abs_errors = np.abs(error)
-        rel_errors = np.abs(error)# / y)
-    print('[%s] absolute errors: %3.3f, %3.3f, %3.3f' % (name, abs_errors.min(), abs_errors.mean(), abs_errors.max()))
-    print('[%s] relative errors: %3.3f, %3.3f, %3.3f' % (name, rel_errors.min(), rel_errors.mean(), rel_errors.max()))
+        rel_errors = np.abs(error)
+        print('[%s] absolute errors: %3.3f, %3.3f, %3.3f' % (name, abs_errors.min(), abs_errors.mean(), abs_errors.max()))
     if plot or show:
         plt.figure()
         plt.plot(y, y_pred, 'o')
@@ -100,3 +101,5 @@ def analyze_errors(y, y_pred, name, aux=None, plot=False, show=False):
         plt.xlabel('y_%s' % name)
         plt.ylabel('y_pred_%s' % name)
         if show: plt.show()
+    
+    return rel_errors.flatten()

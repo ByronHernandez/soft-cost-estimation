@@ -1,106 +1,153 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-# from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor
+
 from sklearn.neural_network import MLPRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV, KFold
 
-from .utils import normalize, denormalize, analyze_errors, plot_r2_vs_param, empirical_distribution
+from multiprocessing import Pool
 
-def random_forest_experiment(X, y, aux=None):
-    empirical_distribution(y, plot=False, show=False)
-    X_norm, y_norm, X_normalizer, y_normalizer = normalize(X, y, mode='max')
-
-    model = RandomForestRegressor(criterion='squared_error')
-    # param_grid = {"n_estimators": list([1, 10, 20, 30, 40, 50, 60]),
-    #               "min_samples_leaf": list([1, 10, 20, 30, 40, 50, 60]),}
-    param_grid = {"n_estimators": list(range(1, 61, 3)),
-                  "min_samples_leaf": list(range(1, 61, 3)),}
-    grid_search = GridSearchCV(model, param_grid, cv=KFold(5), error_score='raise', scoring='max_error', 
-                                                               return_train_score=True, n_jobs=16, verbose=1)
-    grid_search.fit(X_norm, y_norm)
-    # print(grid_search.best_params_)
-    # print(grid_search.best_score_)
-    print(grid_search.best_estimator_)
-
-    results = pd.DataFrame(grid_search.cv_results_)
-    plot_r2_vs_param(results, 'param_n_estimators', show=True)
-    plot_r2_vs_param(results, 'param_min_samples_leaf', show=True)
-
-    y_pred_norm = grid_search.best_estimator_.predict(X_norm)
-    y_pred = denormalize(y_pred_norm, y_normalizer, mode='max')
-    analyze_errors(y_norm, y_pred_norm, 'normalized', aux=None, plot=False, show=False)
-    analyze_errors(y, y_pred, 'original', aux=aux, plot=False, show=False)
-
-    return grid_search.best_estimator_
+from .utils import analyze_errors, plot_r2_vs_param
 
 
-def neural_network_experiment(X, y, aux=None):
-    X_norm, y_norm, X_normalizer, y_normalizer = normalize(X, y, mode='max')
-    model = MLPRegressor(hidden_layer_sizes=(50, 15, 5), max_iter=5000)
-    param_grid = {"activation": ['relu'], # [‘identity', ‘logistic', ‘tanh', ‘relu'],
-                  "solver": ['lbfgs'], # ['lbfgs', 'sgd', 'adam'],
-                  "alpha": [1e-1, 1e-2], #[1e-1, 1e-2, 1e-3],
-                  "learning_rate": ['constant', 'adaptive'], #['constant', 'invscaling', ‘adaptive'],
-                  "learning_rate_init": [1e-1, 1e-2] # [1e-1, 1e-2, 1e-3],
-                  }
-    grid_search = GridSearchCV(model, param_grid, cv=KFold(5), error_score='raise', scoring='max_error', 
-                                                               return_train_score=True, n_jobs=16, verbose=1)
-    grid_search.fit(X_norm, y_norm)
-    # print(grid_search.best_params_)
-    # print(grid_search.best_score_)
-    print(grid_search.best_estimator_)
+class Experiment():
+    def __init__(self, X, y, actual_cost, estimated_cost, train_indexes, test_indexes, cv):
+        self.X = X
+        self.y = y
+        self.actual_cost = actual_cost
+        self.estimated_cost = estimated_cost
+        # Create the train and test sets
+        self.X_train = X[train_indexes]
+        self.y_train = y[train_indexes]
+        self.estimated_cost_train = estimated_cost[train_indexes]
+        self.actual_cost_train = actual_cost[train_indexes]
+        self.X_test = X[test_indexes]
+        self.y_test = y[test_indexes]
+        self.estimated_cost_test = estimated_cost[test_indexes]
+        self.actual_cost_test = actual_cost[test_indexes]
+        self.normalize()
 
-    y_pred_norm = grid_search.best_estimator_.predict(X_norm)
-    y_pred = denormalize(y_pred_norm, y_normalizer, mode='max')
-    analyze_errors(y_norm, y_pred_norm, 'normalized', aux=None, plot=False, show=False)
-    analyze_errors(y, y_pred, 'original', aux=aux, plot=False, show=False)
+    def normalize(self):
+        # Obtain min, max, std and mean of the train set
+        self.X_train_min = np.min(self.X_train, axis=0)
+        self.X_train_max = np.max(self.X_train, axis=0)
+        self.X_train_std = np.std(self.X_train, axis=0)
+        self.X_train_mean = np.mean(self.X_train, axis=0)
+        self.y_train_min = np.min(self.y_train)
+        self.y_train_max = np.max(self.y_train)
+        self.y_train_std = np.std(self.y_train)
+        self.y_train_mean = np.mean(self.y_train)
+        # Normalize the train set
+        self.X_train_normalized = self.X_train.copy() / self.X_train_max
+        self.y_train_normalized = self.y_train.copy() / self.y_train_max
+        # Normalize the test set
+        self.X_test_normalized = self.X_test.copy() / self.X_train_max
+        self.y_test_normalized = self.y_test.copy() / self.y_train_max
+
+    def denormalize(self, y):
+        return y * self.y_train_max
     
-    return grid_search.best_estimator_
+    def run(self):
+        self.grid_search.fit(self.X_train_normalized, self.y_train_normalized)
+        self.best_params = self.grid_search.best_params_
+        self.best_score = self.grid_search.best_score_
+        self.best_model = self.grid_search.best_estimator_
+        rel_errors_test = self.analyze_errors()
+        return rel_errors_test
+    
+    def analyze_errors(self):
+        self.y_train_pred_normalized = self.best_model.predict(self.X_train_normalized)
+        self.y_train_pred = self.denormalize(self.y_train_pred_normalized)
+        rel_errors_train_normalized = analyze_errors(self.y_train_normalized, self.y_train_pred_normalized, 
+                      'normalized gain - train', None,                                                plot=False, show=False)
+        rel_errors_train = analyze_errors(self.y_train, self.y_train_pred, 
+                      'actual cost     - train', (self.actual_cost_train, self.estimated_cost_train), plot=False, show=False)
+        
+        self.y_test_pred_normalized = self.best_model.predict(self.X_test_normalized)
+        self.y_test_pred = self.denormalize(self.y_test_pred_normalized)
+        rel_errors_test_normalized = analyze_errors(self.y_test_normalized, self.y_test_pred_normalized, 
+                       'normalized gain  - test', None,                                              plot=False, show=False)
+        rel_errors_test = analyze_errors(self.y_test, self.y_test_pred, 
+                       'actual cost      - test', (self.actual_cost_test, self.estimated_cost_test), plot=False, show=False)
 
-def ransac_neural_experiment(X, y, aux=None):
-    X_norm, y_norm, X_normalizer, y_normalizer = normalize(X, y, mode='max')
-    model = MLPRegressor(hidden_layer_sizes=(50, 15, 5), max_iter=5000, activation='relu', 
+        return rel_errors_test
+
+
+class RandomForestExperiment(Experiment):
+    def __init__(self, X, y, actual_cost, estimated_cost, train_indexes, test_indexes, cv):
+        super().__init__(X, y, actual_cost, estimated_cost, train_indexes, test_indexes, cv)
+        # Create the model
+        self.model = RandomForestRegressor(criterion='squared_error')
+        self.param_grid = {
+                            "n_estimators": list(range(1, 61, 3)), 
+                            "min_samples_leaf": list(range(1, 61, 3)),
+                          }
+        self.cv = cv
+        self.grid_search = GridSearchCV(self.model, self.param_grid, cv=cv, error_score='raise', verbose=1,
+                                        scoring='max_error', return_train_score=True, n_jobs=16)
+
+
+class NeuralNetworkExperiment(Experiment):
+    def __init__(self, X, y, actual_cost, estimated_cost, train_indexes, test_indexes, cv):
+        super().__init__(X, y, actual_cost, estimated_cost, train_indexes, test_indexes, cv)
+        # Create the model
+        self.model = MLPRegressor(hidden_layer_sizes=(50, 15, 5), max_iter=5000)
+        self.param_grid = { 
+                            "activation": ['relu'], # [‘identity', ‘logistic', ‘tanh', ‘relu'],
+                            "solver": ['lbfgs'], # ['lbfgs', 'sgd', 'adam'],
+                            "alpha": [1e-1, 1e-2], #[1e-1, 1e-2, 1e-3],
+                            "learning_rate": ['constant', 'adaptive'], #['constant', 'invscaling', ‘adaptive'],
+                            "learning_rate_init": [1e-1, 1e-2] # [1e-1, 1e-2, 1e-3],
+                          }
+        self.cv = cv
+        self.grid_search = GridSearchCV(self.model, self.param_grid, cv=cv, error_score='raise', verbose=1,
+                                        scoring='max_error', return_train_score=True, n_jobs=16)
+
+
+class NeuralRANSACExperiment(Experiment):
+    def __init__(self, X, y, actual_cost, estimated_cost, train_indexes, test_indexes, cv):
+        super().__init__(X, y, actual_cost, estimated_cost, train_indexes, test_indexes, cv)
+
+        self.model = model = MLPRegressor(hidden_layer_sizes=(50, 15, 5), max_iter=5000, activation='relu', 
                          solver='lbfgs', alpha=1e-2, learning_rate='constant', learning_rate_init=1e-2)
-    # 
-    N = len(y_norm)
-    gamma = 0.2
-    inlier_indexes = np.array([])
 
-    for i in range(500):
-        indexes_r = np.array(list(set(range(len(X_norm))) - set(inlier_indexes)))             # remaining indexes
-        indexes_i = np.random.choice(indexes_r, max(1, len(indexes_r) // 4), replace=False)   # random indexes
-        indexes_c = np.array(list(set(range(len(X_norm))) - set(indexes_i)))                  # complementary indexes
-        indexes_i = np.append(indexes_i, inlier_indexes).astype(int)                          # inliers + random (new) indexes
-        X_i = X_norm[indexes_i]
-        # X_c = X_norm[indexes_c]
-        y_i = y_norm[indexes_i]
-        # y_c = y_norm[indexes_c]
-        model.fit(X_i, y_i)
-        y_pred_norm_i = model.predict(X_norm)
-        y_pred_i = denormalize(y_pred_norm_i, y_normalizer, mode='max')
-
-        error = np.abs(((1 - y_pred_i)*aux[1] - aux[0]) / aux[0])
-
-        # error = np.abs((y_pred_i - y)) # / y)
+    def run(self):
+        N = len(self.y_train)
+        P = 16
+        M = 50
+        gamma = 0.3
         
-        inlier_indexes_i = np.where(error < gamma)[0]
-        if len(inlier_indexes_i) > len(inlier_indexes):
-            inlier_indexes = inlier_indexes_i
-            print('Iteration %03d: %d inliers' % (i, len(inlier_indexes)))
-        if len(inlier_indexes) > N * 0.9: break
+        inlier_indexes = np.array([])
+        for i in range(M):
+            # indexes_r = np.array(list(set(range(N)) - set(inlier_indexes)))                       # remaining indexes
+            # indexes_i = np.random.choice(indexes_r, max(1, len(indexes_r) // 2), replace=False)   # random indexes
+            # indexes_i = np.append(indexes_i, inlier_indexes).astype(int)                          # inliers + random (new) indexes
+            indexes_i = np.random.choice(range(N), N //2 , replace=False)
+            X_i = self.X_train_normalized[indexes_i]
+            y_i = self.y_train_normalized[indexes_i]
+            self.model.fit(X_i, y_i)
+            y_test_pred_norm_i = self.model.predict(self.X_test_normalized)
+            y_test_pred_i = self.denormalize(y_test_pred_norm_i)
 
-    X_norm_f = X_norm[inlier_indexes]
-    y_norm_f = y_norm[inlier_indexes]
-    y_f = y[inlier_indexes]
-    model.fit(X_norm_f, y_norm_f)
-    y_pred_norm = model.predict(X_norm_f)
-    y_pred_f = denormalize(y_pred_norm, y_normalizer, mode='max')
-    analyze_errors(y_norm_f, y_pred_norm, 'normalized', aux=None, plot=False, show=False)
-    analyze_errors(y_f, y_pred_f, 'original', aux=(aux[0][inlier_indexes], aux[1][inlier_indexes]), plot=False, show=False)
+            # error = np.abs((self.y_test - y_test_pred_i)/(1 - self.y_test))
+            error = np.abs(((1 - y_test_pred_i) * self.estimated_cost_test - self.actual_cost_test) / self.actual_cost_test)
+            
+            inlier_indexes_i = np.where(error < gamma)[0]
+            if len(inlier_indexes_i) > len(inlier_indexes):
+                inlier_indexes = inlier_indexes_i
+                # print('Iteration %03d: %d inliers' % (i, len(inlier_indexes)))
+            if len(inlier_indexes) == N: break
+        
+        print('Final number of inliers:', len(inlier_indexes))
+        self.best_model = self.model
+        self.best_model.fit(self.X_train_normalized[inlier_indexes], self.y_train_normalized[inlier_indexes])
+        return self.analyze_errors()
+
 
         
 
-if __name__ == "__main__":
-    pass
+
+        
+
+        

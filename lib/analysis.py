@@ -54,9 +54,9 @@ def completeness_analysis(path, verbose=False):
     columns = [
         'ProjID',                     # not relevant
         'Organization id',            # not relevant
-        'Estimated  duration',        # its an estimation from a formula
+        # 'Estimated  duration',        # its an estimation from a formula
         'Estimated size',             # too many missing values: 107
-        'Estimated effort',           # its an estimation from a formula
+        # 'Estimated effort',           # its an estimation from a formula
         'Economic instability impact',# formula including unknown values
         'Top management support',     # formula including unknown values
         'Requirment stability',       # formula including unknown values
@@ -109,7 +109,7 @@ def completeness_analysis(path, verbose=False):
 
     # Delete projects w/o output or with missing values
     rows_to_keep = list(range(len(seera.data)))
-    rows_to_delete = [] # projects with missing values. 4 is outlier
+    rows_to_delete = [4] # projects with missing values. 4 is outlier
 
     for i in range(len(seera.data)):
         for column in seera.names:
@@ -152,7 +152,6 @@ def correlation_analysis(seera, rows_to_keep, output, font_size=6, figsize=(8, 8
     # plt.tight_layout()
     plt.savefig('output/correlation.png', dpi=300, bbox_inches='tight')
     plt.savefig('output/correlation.eps', dpi=300, format='eps', bbox_inches='tight')
-    plt.savefig('output/correlation.pdf', dpi=300, format='pdf', bbox_inches='tight')
 
     # Isolated analisys
     corr_var = corr[[output]]
